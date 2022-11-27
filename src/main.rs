@@ -29,7 +29,11 @@ fn main() {
     }
 
     let mut graph = Network::new(&adj_list, num_crossings, num_streets);
-    let _ = graph.find_sccs();
+    let out = graph.find_sccs();
+    for i in out {
+        print!("{} ", i);
+    }
+    println!("");
     println!("{}", graph.scc_count);
 }
 
