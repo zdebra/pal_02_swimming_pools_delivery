@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::LinkedList;
+use std::hash::Hash;
 use std::{io, vec};
 
 // const UNVISITED: isize = -1;
@@ -35,6 +38,17 @@ fn main() {
     }
     println!("");
     println!("{}", graph.scc_count);
+
+    println!("variability");
+    for crossing in 0..graph.num_crossings {
+        let group: usize = graph.low[crossing].try_into().unwrap();
+        let v: usize = graph
+            .strong_crossing_group_items_counter
+            .get(&group)
+            .unwrap_or(&1)
+            - 1;
+        println!("variability of {} is {}", crossing, v);
+    }
 }
 
 #[derive(Clone, PartialEq, Copy)]
@@ -62,6 +76,8 @@ struct Network<'a> {
     stack: Vec<usize>,
     id: isize,
     scc_count: isize,
+    is_strong_crossing: Vec<bool>,
+    strong_crossing_group_items_counter: HashMap<usize, usize>,
 }
 
 impl<'a> Network<'a> {
@@ -76,6 +92,8 @@ impl<'a> Network<'a> {
             stack: Vec::new(),
             id: 0,
             scc_count: 0,
+            is_strong_crossing: vec![false; num_crossings],
+            strong_crossing_group_items_counter: HashMap::new(),
         }
     }
 
@@ -85,6 +103,77 @@ impl<'a> Network<'a> {
                 self.dfs(node);
             }
         }
+        // scc is done
+
+        // find all strong crossings
+        for crossing in 0..self.num_crossings {
+            let crossing_group = self.low[crossing];
+            let neighbours = &self.adj_list[crossing];
+            let is_strong_crossing = neighbours
+                .iter()
+                .all(|&neighbour| self.low[neighbour] == crossing_group);
+            self.is_strong_crossing[crossing] = is_strong_crossing;
+
+            // count strong crossings in the group
+            if is_strong_crossing {
+                let c: usize = crossing_group.try_into().unwrap();
+                println!("c = {}", c);
+                let count = self
+                    .strong_crossing_group_items_counter
+                    .entry(c)
+                    .or_insert(0);
+                *count += 1;
+            }
+        }
+
+        let mut target_costs: HashMap<usize, HashMap<usize, usize>> = HashMap::new();
+        let mut iterated: HashSet<isize> = HashSet::new();
+        for crossing in 0..self.num_crossings {
+            if !self.is_strong_crossing[crossing] {
+                continue;
+            }
+
+            let crossing_group = self.low[crossing];
+            if iterated.contains(&crossing_group) {
+                continue;
+            }
+
+            // todo
+            let mut q = vec![(crossing, self.neighbours_cost(crossing))]; // (crossing, updates)
+            loop {
+                let c = match q.pop() {
+                    None => break,
+                    Some(c) => c,
+                };
+
+                let crossing_targets = target_costs.entry(c.0).or_insert(HashMap::new());
+                let mut mutated = false;
+                // iterate updates
+                for (crossing, cost) in c.1 {
+                    let old_cost = crossing_targets.entry(crossing).or_insert(cost);
+                    if cost < *old_cost {
+                        *old_cost = cost;
+                        mutated = true;
+                    }
+                }
+
+                if !mutated {
+                    continue;
+                }
+
+                // publish updates for all strong neighbours
+                for neighbour in self.adj_list[crossing]
+                    .into_iter()
+                    .filter(|&x| self.is_strong_crossing[x])
+                {
+                    let updates = self.targets_to_updates(crossing_targets);
+                    q.push((neighbour, updates));
+                }
+            }
+
+            iterated.insert(crossing_group);
+        }
+
         &self.low
     }
 
@@ -131,5 +220,28 @@ impl<'a> Network<'a> {
 
     fn on_stack(&self, to: usize) -> bool {
         self.on_stack[to]
+    }
+
+    fn neighbours_cost(&self, crossing: usize) -> HashMap<usize, usize> {
+        let mut hm = HashMap::new();
+        let neighbours = &self.adj_list[crossing];
+        for neighbour in neighbours
+            .into_iter()
+            .filter(|&&x| self.is_strong_crossing[x])
+        {
+            hm.insert(*neighbour, 1);
+        }
+        hm
+    }
+
+    fn targets_to_updates(
+        &self,
+        crossing_targets: &HashMap<usize, usize>,
+    ) -> HashMap<usize, usize> {
+        let mut hm = HashMap::new();
+        for (k, v) in crossing_targets {
+            hm.insert(k, v + 1);
+        }
+        hm
     }
 }
