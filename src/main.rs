@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::LinkedList;
-use std::isize::MAX;
 use std::{io, vec};
-
-// const UNVISITED: isize = -1;
 
 fn main() {
     let mut lines = io::stdin().lines();
@@ -12,10 +9,7 @@ fn main() {
 
     let mut header_splits = header.split_whitespace();
     let num_crossings = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of nodes
-    let num_streets = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of edges
-
-    println!("num crossings: {}", num_crossings);
-    println!("num streets: {}", num_streets);
+    let _ = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of edges
 
     let mut adj_list = vec![LinkedList::<usize>::new(); num_crossings];
     let mut target_list = vec![LinkedList::<usize>::new(); num_crossings]; // = the opossite of adj_list
@@ -30,69 +24,12 @@ fn main() {
     });
 
     let mut graph = Network::new(&adj_list, &target_list, num_crossings);
-    graph.find_sccs();
-
-    println!("variability");
-    let mut max_variability = 0;
-    let mut max_variability_list = Vec::<usize>::new();
-    for crossing in 0..graph.num_crossings {
-        let group: usize = graph.low[crossing].try_into().unwrap();
-        let v: usize = graph
-            .strong_crossing_group_items_counter
-            .get(&group)
-            .unwrap_or(&1)
-            - 1;
-        if v == max_variability {
-            max_variability_list.push(crossing);
-        } else if v > max_variability {
-            max_variability = v;
-            max_variability_list.clear();
-            max_variability_list.push(crossing);
-        }
-    }
+    let output = graph.run();
 
     println!(
-        "max variability is {max_variability} with these crossings {:?}",
-        max_variability_list
+        "{} {} {}",
+        output.num_prospective_crossings, output.variability, output.cost
     );
-
-    println!("");
-    println!("costs:");
-    let mut min_cost = usize::MAX;
-    let mut min_cost_list = Vec::<usize>::new();
-    for crossing in max_variability_list {
-        if !graph.is_strong_crossing[crossing] {
-            continue;
-        }
-        let mut sum = 0;
-        for (target, cost) in graph.crossing_target_cost.get(&crossing).unwrap() {
-            if target == &crossing {
-                continue;
-            }
-            if !graph.is_strong_crossing[*target] {
-                continue;
-            }
-            let cost_for_return = graph
-                .crossing_target_cost
-                .get(target)
-                .unwrap()
-                .get(&crossing)
-                .unwrap();
-
-            sum += 2 * cost;
-            sum += cost_for_return;
-        }
-
-        if sum == min_cost {
-            min_cost_list.push(crossing);
-        } else if sum < min_cost {
-            min_cost = sum;
-            min_cost_list.clear();
-            min_cost_list.push(crossing);
-        }
-    }
-
-    println!("min cost is {min_cost} for these {:?}", min_cost_list);
 }
 
 #[derive(Clone, PartialEq, Copy)]
@@ -108,6 +45,12 @@ impl NodeID {
             Self::Visited(v) => v,
         }
     }
+}
+
+struct Output {
+    num_prospective_crossings: usize,
+    variability: usize,
+    cost: usize,
 }
 
 struct Network<'a> {
@@ -147,36 +90,72 @@ impl<'a> Network<'a> {
         }
     }
 
-    fn find_sccs(&mut self) -> &Vec<isize> {
-        for node in 0..self.num_crossings {
-            if self.ids[node] == NodeID::Unvisited {
-                self.dfs(node);
-            }
-        }
-        // scc is done
+    fn run(&mut self) -> Output {
+        self.find_sccs();
+        self.compute_cost();
+        self.max_variability_min_cost()
+    }
 
-        // find all strong crossings
+    fn max_variability_min_cost(&self) -> Output {
+        let mut max_variability = 0;
+        let mut max_variability_list = Vec::<usize>::new();
         for crossing in 0..self.num_crossings {
-            let crossing_group = self.low[crossing];
-            let neighbours = &self.adj_list[crossing];
-            let is_strong_crossing = neighbours
-                .iter()
-                .all(|&neighbour| self.low[neighbour] == crossing_group);
-            self.is_strong_crossing[crossing] = is_strong_crossing;
-
-            // count strong crossings in the group
-            if is_strong_crossing {
-                let c: usize = crossing_group.try_into().unwrap();
-                let count = self
-                    .strong_crossing_group_items_counter
-                    .entry(c)
-                    .or_insert(0);
-                *count += 1;
+            let group: usize = self.low[crossing].try_into().unwrap();
+            let v: usize = self
+                .strong_crossing_group_items_counter
+                .get(&group)
+                .unwrap_or(&1)
+                - 1;
+            if v == max_variability {
+                max_variability_list.push(crossing);
+            } else if v > max_variability {
+                max_variability = v;
+                max_variability_list.clear();
+                max_variability_list.push(crossing);
             }
         }
 
-        println!("starting to compute distance cost");
+        let mut min_cost = usize::MAX;
+        let mut min_cost_list = Vec::<usize>::new();
+        for crossing in max_variability_list {
+            if !self.is_strong_crossing[crossing] {
+                continue;
+            }
+            let mut sum = 0;
+            for (target, cost) in self.crossing_target_cost.get(&crossing).unwrap() {
+                if target == &crossing {
+                    continue;
+                }
+                if !self.is_strong_crossing[*target] {
+                    continue;
+                }
+                let cost_for_return = self
+                    .crossing_target_cost
+                    .get(target)
+                    .unwrap()
+                    .get(&crossing)
+                    .unwrap();
 
+                sum += 2 * cost;
+                sum += cost_for_return;
+            }
+
+            if sum == min_cost {
+                min_cost_list.push(crossing);
+            } else if sum < min_cost {
+                min_cost = sum;
+                min_cost_list.clear();
+                min_cost_list.push(crossing);
+            }
+        }
+        Output {
+            num_prospective_crossings: min_cost_list.len(),
+            variability: max_variability,
+            cost: min_cost,
+        }
+    }
+
+    fn compute_cost(&mut self) {
         let mut iterated: HashSet<isize> = HashSet::new();
         for crossing in 0..self.num_crossings {
             if !self.is_strong_crossing[crossing] {
@@ -273,7 +252,35 @@ impl<'a> Network<'a> {
 
             iterated.insert(crossing_group);
         }
+    }
 
+    fn find_sccs(&mut self) -> &Vec<isize> {
+        for node in 0..self.num_crossings {
+            if self.ids[node] == NodeID::Unvisited {
+                self.dfs(node);
+            }
+        }
+        // scc is done
+
+        // find all strong crossings
+        for crossing in 0..self.num_crossings {
+            let crossing_group = self.low[crossing];
+            let neighbours = &self.adj_list[crossing];
+            let is_strong_crossing = neighbours
+                .iter()
+                .all(|&neighbour| self.low[neighbour] == crossing_group);
+            self.is_strong_crossing[crossing] = is_strong_crossing;
+
+            // count strong crossings in the group
+            if is_strong_crossing {
+                let c: usize = crossing_group.try_into().unwrap();
+                let count = self
+                    .strong_crossing_group_items_counter
+                    .entry(c)
+                    .or_insert(0);
+                *count += 1;
+            }
+        }
         &self.low
     }
 
