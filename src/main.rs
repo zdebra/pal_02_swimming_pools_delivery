@@ -131,6 +131,8 @@ impl<'a> Network<'a> {
             }
         }
 
+        println!("starting to compute distance cost");
+
         let mut crossing_target_cost: HashMap<usize, HashMap<usize, usize>> = HashMap::new();
         let mut iterated: HashSet<isize> = HashSet::new();
         for crossing in 0..self.num_crossings {
@@ -145,6 +147,7 @@ impl<'a> Network<'a> {
             }
 
             // send all targets of this crossing to all nodes this crossing is target of
+            println!("starting updates for scc {}", crossing_group);
 
             struct Update {
                 crossing: usize,
@@ -156,10 +159,12 @@ impl<'a> Network<'a> {
                 updates: HashMap::<usize, usize>::new(),
             }];
             loop {
+                // println!("cur queue size is {}", q.len());
                 let u = match q.pop() {
                     None => break,
                     Some(u) => u,
                 };
+                // println!("got {} updates", u.updates.len());
 
                 // 1. get my targets
                 let my_targets = crossing_target_cost
@@ -169,6 +174,9 @@ impl<'a> Network<'a> {
                 let mut mutated = false;
                 // 2. update targets with my strong neighbours
                 for n in &self.adj_list[u.crossing] {
+                    if !self.is_strong_crossing[*n] {
+                        continue;
+                    }
                     if let Some(&cost) = my_targets.get(n) {
                         if cost > 1 {
                             mutated = true;
@@ -182,9 +190,10 @@ impl<'a> Network<'a> {
                 }
 
                 // 3. apply updates
+                println!("got {} updates", u.updates.len());
                 for (target_crossing, cost) in u.updates.into_iter() {
                     if let Some(&old_cost) = my_targets.get(&target_crossing) {
-                        if cost > old_cost {
+                        if cost < old_cost {
                             mutated = true;
                             my_targets.insert(target_crossing, cost);
                         }
