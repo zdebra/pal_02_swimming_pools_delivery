@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::LinkedList;
+use std::fmt;
 use std::{io, vec};
 
 fn main() {
@@ -9,10 +10,7 @@ fn main() {
     let mut graph = Network::from_reader(input);
     let output = graph.run();
 
-    println!(
-        "{} {} {}",
-        output.num_prospective_crossings, output.variability, output.cost
-    );
+    println!("{}", output);
 }
 
 #[derive(Clone, PartialEq, Copy)]
@@ -36,6 +34,16 @@ struct Output {
     cost: usize,
 }
 
+impl fmt::Display for Output {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            self.num_prospective_crossings, self.variability, self.cost
+        )
+    }
+}
+
 struct Network {
     num_crossings: usize,
     adj_list: Vec<LinkedList<usize>>,
@@ -54,8 +62,6 @@ struct Network {
 impl Network {
     fn from_reader(reader: impl io::BufRead) -> Self {
         let mut lines = reader.lines();
-        // let mut lines = r.buffer().lines();
-        // let mut lines = io::stdin().lines();
         let header = lines.next().unwrap().unwrap();
 
         let mut header_splits = header.split_whitespace();
