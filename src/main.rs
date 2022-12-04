@@ -50,6 +50,12 @@ fn main() {
             - 1;
         println!("variability of {} is {}", crossing, v);
     }
+
+    println!("");
+    println!("target cost for 11:");
+    for (target, cost) in graph.crossing_target_cost.get(&11).unwrap() {
+        println!("{target}: {cost}");
+    }
 }
 
 #[derive(Clone, PartialEq, Copy)]
@@ -79,6 +85,7 @@ struct Network<'a> {
     scc_count: isize,
     is_strong_crossing: Vec<bool>,
     strong_crossing_group_items_counter: HashMap<usize, usize>,
+    crossing_target_cost: HashMap<usize, HashMap<usize, usize>>,
 }
 
 impl<'a> Network<'a> {
@@ -99,6 +106,7 @@ impl<'a> Network<'a> {
             scc_count: 0,
             is_strong_crossing: vec![false; num_crossings],
             strong_crossing_group_items_counter: HashMap::new(),
+            crossing_target_cost: HashMap::new(),
         }
     }
 
@@ -133,7 +141,6 @@ impl<'a> Network<'a> {
 
         println!("starting to compute distance cost");
 
-        let mut crossing_target_cost: HashMap<usize, HashMap<usize, usize>> = HashMap::new();
         let mut iterated: HashSet<isize> = HashSet::new();
         for crossing in 0..self.num_crossings {
             if !self.is_strong_crossing[crossing] {
@@ -167,14 +174,18 @@ impl<'a> Network<'a> {
                 // println!("got {} updates", u.updates.len());
 
                 // 1. get my targets
-                let my_targets = crossing_target_cost
+                let my_targets = self
+                    .crossing_target_cost
                     .entry(u.crossing)
                     .or_insert(HashMap::new());
 
                 let mut mutated = false;
-                // 2. update targets with my strong neighbours
+                // 2. update targets with my strong neighbours from the same scc
                 for n in &self.adj_list[u.crossing] {
                     if !self.is_strong_crossing[*n] {
+                        continue;
+                    }
+                    if self.low[u.crossing] != self.low[*n] {
                         continue;
                     }
                     if let Some(&cost) = my_targets.get(n) {
@@ -214,6 +225,12 @@ impl<'a> Network<'a> {
                 }
 
                 for &target_of in &self.target_list[u.crossing] {
+                    if !self.is_strong_crossing[target_of] {
+                        continue;
+                    }
+                    if self.low[target_of] != self.low[u.crossing] {
+                        continue;
+                    }
                     q.push(Update {
                         crossing: target_of,
                         updates: next_updates.clone(),
