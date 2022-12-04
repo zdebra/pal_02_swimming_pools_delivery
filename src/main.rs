@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::LinkedList;
+use std::isize::MAX;
 use std::{io, vec};
 
 // const UNVISITED: isize = -1;
@@ -32,6 +33,8 @@ fn main() {
     graph.find_sccs();
 
     println!("variability");
+    let mut max_variability = 0;
+    let mut max_variability_list = Vec::<usize>::new();
     for crossing in 0..graph.num_crossings {
         let group: usize = graph.low[crossing].try_into().unwrap();
         let v: usize = graph
@@ -39,12 +42,25 @@ fn main() {
             .get(&group)
             .unwrap_or(&1)
             - 1;
-        println!("variability of {} is {}", crossing, v);
+        if v == max_variability {
+            max_variability_list.push(crossing);
+        } else if v > max_variability {
+            max_variability = v;
+            max_variability_list.clear();
+            max_variability_list.push(crossing);
+        }
     }
+
+    println!(
+        "max variability is {max_variability} with these crossings {:?}",
+        max_variability_list
+    );
 
     println!("");
     println!("costs:");
-    for crossing in 0..graph.num_crossings {
+    let mut min_cost = usize::MAX;
+    let mut min_cost_list = Vec::<usize>::new();
+    for crossing in max_variability_list {
         if !graph.is_strong_crossing[crossing] {
             continue;
         }
@@ -67,8 +83,16 @@ fn main() {
             sum += cost_for_return;
         }
 
-        println!("cost of crossing {crossing} is {sum}");
+        if sum == min_cost {
+            min_cost_list.push(crossing);
+        } else if sum < min_cost {
+            min_cost = sum;
+            min_cost_list.clear();
+            min_cost_list.push(crossing);
+        }
     }
+
+    println!("min cost is {min_cost} for these {:?}", min_cost_list);
 }
 
 #[derive(Clone, PartialEq, Copy)]
