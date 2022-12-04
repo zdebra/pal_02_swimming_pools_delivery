@@ -4,26 +4,9 @@ use std::collections::LinkedList;
 use std::{io, vec};
 
 fn main() {
-    let mut lines = io::stdin().lines();
-    let header = lines.next().unwrap().unwrap();
-
-    let mut header_splits = header.split_whitespace();
-    let num_crossings = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of nodes
-    let _ = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of edges
-
-    let mut adj_list = vec![LinkedList::<usize>::new(); num_crossings];
-    let mut target_list = vec![LinkedList::<usize>::new(); num_crossings]; // = the opossite of adj_list
-
-    lines.for_each(|line| {
-        let lu = line.unwrap();
-        let mut line_splits = lu.split_whitespace();
-        let from = line_splits.next().unwrap().parse::<usize>().unwrap();
-        let to = line_splits.next().unwrap().parse::<usize>().unwrap();
-        adj_list[from].push_back(to);
-        target_list[to].push_back(from);
-    });
-
-    let mut graph = Network::new(&adj_list, &target_list, num_crossings);
+    let stdio = io::stdin();
+    let input = stdio.lock();
+    let mut graph = Network::from_reader(input);
     let output = graph.run();
 
     println!(
@@ -53,10 +36,10 @@ struct Output {
     cost: usize,
 }
 
-struct Network<'a> {
+struct Network {
     num_crossings: usize,
-    adj_list: &'a Vec<LinkedList<usize>>,
-    target_list: &'a Vec<LinkedList<usize>>,
+    adj_list: Vec<LinkedList<usize>>,
+    target_list: Vec<LinkedList<usize>>,
     ids: Vec<NodeID>,
     low: Vec<isize>,
     on_stack: Vec<bool>,
@@ -68,10 +51,34 @@ struct Network<'a> {
     crossing_target_cost: HashMap<usize, HashMap<usize, usize>>,
 }
 
-impl<'a> Network<'a> {
+impl Network {
+    fn from_reader(reader: impl io::BufRead) -> Self {
+        let mut lines = reader.lines();
+        // let mut lines = r.buffer().lines();
+        // let mut lines = io::stdin().lines();
+        let header = lines.next().unwrap().unwrap();
+
+        let mut header_splits = header.split_whitespace();
+        let num_crossings = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of nodes
+        let _ = header_splits.next().unwrap().parse::<usize>().unwrap(); // number of edges
+
+        let mut adj_list = vec![LinkedList::<usize>::new(); num_crossings];
+        let mut target_list = vec![LinkedList::<usize>::new(); num_crossings]; // = the opossite of adj_list
+
+        lines.for_each(|line| {
+            let lu = line.unwrap();
+            let mut line_splits = lu.split_whitespace();
+            let from = line_splits.next().unwrap().parse::<usize>().unwrap();
+            let to = line_splits.next().unwrap().parse::<usize>().unwrap();
+            adj_list[from].push_back(to);
+            target_list[to].push_back(from);
+        });
+        Self::new(adj_list, target_list, num_crossings)
+    }
+
     fn new(
-        adj_list: &'a Vec<LinkedList<usize>>,
-        target_list: &'a Vec<LinkedList<usize>>,
+        adj_list: Vec<LinkedList<usize>>,
+        target_list: Vec<LinkedList<usize>>,
         num_crossings: usize,
     ) -> Self {
         Self {
@@ -292,7 +299,7 @@ impl<'a> Network<'a> {
         self.ids[at] = id;
         self.low[at] = id.must_get();
 
-        let neighbours = &self.adj_list[at];
+        let neighbours = self.adj_list[at].clone();
         for &to in neighbours.iter() {
             if self.ids[to] == NodeID::Unvisited {
                 self.dfs(to);
