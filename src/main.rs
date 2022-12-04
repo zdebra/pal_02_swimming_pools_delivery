@@ -342,3 +342,35 @@ impl Network {
         self.on_stack[to]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, io::BufReader};
+    #[test]
+    fn pub_scenarios() {
+        let scenarios = vec![
+            ("pub/pub01.in", "pub/pub01.out"),
+            ("pub/pub02.in", "pub/pub02.out"),
+            ("pub/pub03.in", "pub/pub03.out"),
+            ("pub/pub04.in", "pub/pub04.out"),
+            ("pub/pub05.in", "pub/pub05.out"),
+            ("pub/pub06.in", "pub/pub06.out"),
+            ("pub/pub07.in", "pub/pub07.out"),
+            ("pub/pub08.in", "pub/pub08.out"),
+            ("pub/pub09.in", "pub/pub09.out"),
+            ("pub/pub10.in", "pub/pub10.out"),
+        ];
+
+        for scenario in scenarios {
+            let input_file = fs::File::open(scenario.0).expect("file not found");
+            let buf_reader = BufReader::new(input_file);
+            let mut graph = Network::from_reader(buf_reader);
+            let output = graph.run();
+
+            let expected_output = fs::read_to_string(scenario.1).expect("file not found");
+
+            assert_eq!(expected_output, output.to_string() + "\n");
+        }
+    }
+}
