@@ -28,17 +28,8 @@ fn main() {
         target_list[to].push_back(from);
     });
 
-    for (i, from) in adj_list.iter().enumerate() {
-        from.iter().for_each(|to| println!("from {} to {}", i, to));
-    }
-
     let mut graph = Network::new(&adj_list, &target_list, num_crossings);
-    let out = graph.find_sccs();
-    for i in out {
-        print!("{} ", i);
-    }
-    println!("");
-    println!("{}", graph.scc_count);
+    graph.find_sccs();
 
     println!("variability");
     for crossing in 0..graph.num_crossings {
@@ -52,9 +43,31 @@ fn main() {
     }
 
     println!("");
-    println!("target cost for 11:");
-    for (target, cost) in graph.crossing_target_cost.get(&11).unwrap() {
-        println!("{target}: {cost}");
+    println!("costs:");
+    for crossing in 0..graph.num_crossings {
+        if !graph.is_strong_crossing[crossing] {
+            continue;
+        }
+        let mut sum = 0;
+        for (target, cost) in graph.crossing_target_cost.get(&crossing).unwrap() {
+            if target == &crossing {
+                continue;
+            }
+            if !graph.is_strong_crossing[*target] {
+                continue;
+            }
+            let cost_for_return = graph
+                .crossing_target_cost
+                .get(target)
+                .unwrap()
+                .get(&crossing)
+                .unwrap();
+
+            sum += 2 * cost;
+            sum += cost_for_return;
+        }
+
+        println!("cost of crossing {crossing} is {sum}");
     }
 }
 
@@ -130,7 +143,6 @@ impl<'a> Network<'a> {
             // count strong crossings in the group
             if is_strong_crossing {
                 let c: usize = crossing_group.try_into().unwrap();
-                println!("c = {}", c);
                 let count = self
                     .strong_crossing_group_items_counter
                     .entry(c)
@@ -154,8 +166,6 @@ impl<'a> Network<'a> {
             }
 
             // send all targets of this crossing to all nodes this crossing is target of
-            println!("starting updates for scc {}", crossing_group);
-
             struct Update {
                 crossing: usize,
                 updates: HashMap<usize, usize>,
@@ -201,7 +211,6 @@ impl<'a> Network<'a> {
                 }
 
                 // 3. apply updates
-                println!("got {} updates", u.updates.len());
                 for (target_crossing, cost) in u.updates.into_iter() {
                     if let Some(&old_cost) = my_targets.get(&target_crossing) {
                         if cost < old_cost {
